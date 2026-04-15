@@ -341,40 +341,115 @@ func main() {
 		// This approach is actually a workaround for the problem that Docker
 		// Distribution doesn't implement TagService.Untag operation at the time of
 		// this writing.
-		// Actually we have to delete the underlying image (specified via its Digest
-		// value), taking care not to delete images that are referenced by tags which
-		// we want to preserve
+		// We delete image digests for outdated tags. If a digest is shared with tags
+		// we must preserve, we retag the outdated tag to a disposable digest and then
+		// delete that disposable digest.
 		nonDeletableDigests := make(map[string]string)
 		for _, tag := range nonDeletableTags {
-			if nonDeletableDigests[tag.Descriptor.Digest.String()] == "" {
-				nonDeletableDigests[tag.Descriptor.Digest.String()] = tag.Tag
+			digest := tag.Descriptor.Digest.String()
+			if existingTags, exists := nonDeletableDigests[digest]; !exists {
+				nonDeletableDigests[digest] = tag.Tag
 			} else {
-				nonDeletableDigests[tag.Descriptor.Digest.String()] = nonDeletableDigests[tag.Descriptor.Digest.String()] + ", " + tag.Tag
+				nonDeletableDigests[digest] = existingTags + ", " + tag.Tag
+			}
+		}
+
+		replacementDigests := make(map[string]Image)
+		for _, tag := range deletableTags {
+			digest := tag.Descriptor.Digest.String()
+			if _, exists := nonDeletableDigests[digest]; !exists {
+				replacementDigests[digest] = tag
 			}
 		}
 
 		digestsDeleted := make(map[string]bool)
+
+		// Phase 1: shared digests first. Retag outdated tags to disposable
+		// digests and delete those disposable digests.
 		for _, tag := range deletableTags {
-			if !digestsDeleted[tag.Descriptor.Digest.String()] {
-				if nonDeletableDigests[tag.Descriptor.Digest.String()] == "" {
-					logger.WithField("tag", tag.Tag).Info("All tags for this image digest marked for deletion")
-					if !*dry {
-						logger.WithField("tag", tag.Tag).WithField("time", tag.Time).WithField("digest", tag.Descriptor.Digest).Infof("Deleting image (-dry=%v)", *dry)
-						err := manifestService.Delete(context.Background(), tag.Descriptor.Digest)
-						if err == nil {
-							digestsDeleted[tag.Descriptor.Digest.String()] = true
-						} else {
-							logger.WithField("tag", tag.Tag).WithField("err", err).Error("Could not delete image!")
-						}
-					} else {
-						logger.WithField("tag", tag.Tag).WithField("time", tag.Time).Infof("Not actually deleting image (-dry=%v)", *dry)
-					}
-				} else {
-					logger.WithField("tag", tag.Tag).WithField("alsoUsedByTags", nonDeletableDigests[tag.Descriptor.Digest.String()]).Infof("The underlying image is also used by non-deletable tags - skipping deletion")
-				}
-			} else {
+			digest := tag.Descriptor.Digest.String()
+
+			if digestsDeleted[digest] {
 				logger.WithField("tag", tag.Tag).Debug("Image under tag already deleted")
+				continue
 			}
+
+			nonDeletableTagsForDigest, hasNonDeletableTags := nonDeletableDigests[digest]
+			if !hasNonDeletableTags {
+				logger.WithField("tag", tag.Tag).Debug("Digest is not shared - defer direct deletion to phase 2")
+				continue
+			}
+
+			var replacementDigest string
+			var replacementTag Image
+			for candidateDigest, candidateTag := range replacementDigests {
+				if candidateDigest != digest {
+					replacementDigest = candidateDigest
+					replacementTag = candidateTag
+					break
+				}
+			}
+
+			if replacementDigest == "" {
+				logger.WithField("tag", tag.Tag).WithField("alsoUsedByTags", nonDeletableTagsForDigest).Info("The underlying image is also used by non-deletable tags and no disposable replacement digest is available - skipping deletion")
+				continue
+			}
+
+			logger.
+				WithField("tag", tag.Tag).
+				WithField("sharedDigest", digest).
+				WithField("alsoUsedByTags", nonDeletableTagsForDigest).
+				WithField("replacementDigest", replacementTag.Descriptor.Digest.String()).
+				Info("Digest is shared with non-deletable tags - retagging to disposable digest for safe untag")
+
+			if *dry {
+				logger.WithField("tag", tag.Tag).WithField("replacementDigest", replacementTag.Descriptor.Digest.String()).Infof("Not actually retagging/deleting digest (-dry=%v)", *dry)
+				continue
+			}
+
+			if err := tagsService.Tag(ctx, tag.Tag, replacementTag.Descriptor); err != nil {
+				logger.WithField("tag", tag.Tag).WithField("replacementDigest", replacementTag.Descriptor.Digest.String()).WithField("err", err).Error("Could not retag image to disposable digest!")
+				continue
+			}
+
+			if err := manifestService.Delete(ctx, replacementTag.Descriptor.Digest); err != nil {
+				logger.WithField("tag", tag.Tag).WithField("replacementDigest", replacementTag.Descriptor.Digest.String()).WithField("err", err).Error("Could not delete disposable digest after retagging!")
+				continue
+			}
+
+			delete(replacementDigests, replacementDigest)
+			digestsDeleted[replacementDigest] = true
+		}
+
+		// Phase 2: non-shared digests. Delete digest directly.
+		for _, tag := range deletableTags {
+			digest := tag.Descriptor.Digest.String()
+
+			if digestsDeleted[digest] {
+				logger.WithField("tag", tag.Tag).Debug("Image under tag already deleted")
+				continue
+			}
+
+			if _, hasNonDeletableTags := nonDeletableDigests[digest]; hasNonDeletableTags {
+				logger.WithField("tag", tag.Tag).Debug("Digest is shared - already handled in phase 1")
+				continue
+			}
+
+			logger.WithField("tag", tag.Tag).Info("All tags for this image digest marked for deletion")
+
+			if *dry {
+				logger.WithField("tag", tag.Tag).WithField("time", tag.Time).Infof("Not actually deleting image (-dry=%v)", *dry)
+				continue
+			}
+
+			logger.WithField("tag", tag.Tag).WithField("time", tag.Time).WithField("digest", tag.Descriptor.Digest).Infof("Deleting image (-dry=%v)", *dry)
+			err := manifestService.Delete(ctx, tag.Descriptor.Digest)
+			if err != nil {
+				logger.WithField("tag", tag.Tag).WithField("err", err).Error("Could not delete image!")
+				continue
+			}
+
+			digestsDeleted[digest] = true
 		}
 
 	}
