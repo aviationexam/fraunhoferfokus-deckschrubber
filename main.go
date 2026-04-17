@@ -15,6 +15,7 @@ import (
 
 	"github.com/aviationexam/deckschrubber/util"
 	"github.com/distribution/reference"
+	"github.com/docker/distribution"
 	schema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/registry/client"
 	log "github.com/sirupsen/logrus"
@@ -407,7 +408,19 @@ func main() {
 				continue
 			}
 
-			if err := tagsService.Tag(ctx, tag.Tag, replacementTag.Descriptor); err != nil {
+			// TagService.Tag() is not implemented in docker/distribution's
+			// client library (it panics with "not implemented"), so we retag
+			// by fetching the replacement manifest and re-PUTing it under the
+			// target tag name via ManifestService.Put. This issues a
+			// PUT /v2/<repo>/manifests/<tag> with the manifest bytes, which
+			// is the wire-level operation `docker tag` + `docker push` perform.
+			replacementManifest, err := manifestService.Get(ctx, replacementTag.Descriptor.Digest)
+			if err != nil {
+				logger.WithField("tag", tag.Tag).WithField("replacementDigest", replacementTag.Descriptor.Digest.String()).WithField("err", err).Error("Could not fetch replacement manifest for retagging!")
+				continue
+			}
+
+			if _, err := manifestService.Put(ctx, replacementManifest, distribution.WithTag(tag.Tag)); err != nil {
 				logger.WithField("tag", tag.Tag).WithField("replacementDigest", replacementTag.Descriptor.Digest.String()).WithField("err", err).Error("Could not retag image to disposable digest!")
 				continue
 			}
