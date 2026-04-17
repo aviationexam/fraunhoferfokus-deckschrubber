@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aviationexam/deckschrubber/util"
 	"github.com/distribution/reference"
 	"github.com/docker/distribution/context"
 	schema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/registry/client"
-	"github.com/fraunhoferfokus/deckschrubber/util"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )

@@ -1,15 +1,17 @@
 # Deckschrubber
 > *n. person responsible for scrubbing a ship's deck.*
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/fraunhoferfokus/deckschrubber)](https://goreportcard.com/report/github.com/fraunhoferfokus/deckschrubber)
-[![License](https://img.shields.io/github/license/fraunhoferfokus/deckschrubber)](https://github.com/fraunhoferfokus/deckschrubber/blob/master/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/aviationexam/deckschrubber)](https://goreportcard.com/report/github.com/aviationexam/deckschrubber)
+[![License](https://img.shields.io/github/license/aviationexam/deckschrubber)](https://github.com/aviationexam/deckschrubber/blob/master/LICENSE)
+
+> **Note:** This is a fork of [fraunhoferfokus/deckschrubber](https://github.com/fraunhoferfokus/deckschrubber) maintained by [aviationexam](https://github.com/aviationexam), with additional fixes and improvements. First modified on 2026-04-16.
 
 Deckschrubber inspects images of a [Container Registry](https://distribution.github.io/distribution/) and removes those older than a given age.
 
 ## Quick Start
 
 ```bash
-go get github.com/fraunhoferfokus/deckschrubber
+go install github.com/aviationexam/deckschrubber@latest
 $GOPATH/bin/deckschrubber
 ```
 

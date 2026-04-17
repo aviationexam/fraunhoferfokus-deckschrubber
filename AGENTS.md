@@ -53,9 +53,9 @@ Flow per invocation:
 
 ## Contributing
 
-This checkout is the `aviationexam/fraunhoferfokus-deckschrubber` fork. Two remotes are configured:
+This checkout is the `aviationexam/deckschrubber` fork. Two remotes are configured:
 
-- `origin` → `aviationexam/fraunhoferfokus-deckschrubber` (our fork — target all PRs here)
+- `origin` → `aviationexam/deckschrubber` (our fork — target all PRs here)
 - `upstream` → `fraunhoferfokus/deckschrubber` (original project)
 
 **Open pull requests against `origin` only.** We treat this fork as our own sandbox and iterate freely here. Please don't send PRs upstream from this checkout — we'd like to keep a friendly relationship with the upstream maintainer, and coordinating changes back to them is handled separately and deliberately.

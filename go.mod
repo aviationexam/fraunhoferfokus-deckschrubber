@@ -1,4 +1,4 @@
-module github.com/fraunhoferfokus/deckschrubber
+module github.com/aviationexam/deckschrubber
 
 go 1.25.0
 
