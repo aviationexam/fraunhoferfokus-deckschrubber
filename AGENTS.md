@@ -25,7 +25,7 @@ go run .            # prints usage (no args = usage, not an error)
 go run . -dry -registry http://localhost:5000 -repos 30
 ```
 
-Version string is hardcoded in `main.go` (`const version = "0.8.0"`). Bump it there and update `CHANGELOG.md` when releasing.
+Version string is hardcoded in `main.go` (`const version = "0.9.1"`). Bump it there and update `CHANGELOG.md` when releasing. See the "Release workflow" section below for the full cut-release procedure.
 
 ## Architecture (read before editing `main.go`)
 
@@ -59,6 +59,77 @@ This checkout is the `aviationexam/deckschrubber` fork. Two remotes are configur
 - `upstream` → `fraunhoferfokus/deckschrubber` (original project)
 
 **Open pull requests against `origin` only.** We treat this fork as our own sandbox and iterate freely here. Please don't send PRs upstream from this checkout — we'd like to keep a friendly relationship with the upstream maintainer, and coordinating changes back to them is handled separately and deliberately.
+
+## Release workflow
+
+Cutting a new release is a single-PR + tag + GitHub-Release flow. Publishing the Release is what triggers the signed image push to GHCR (`.github/workflows/release.yml`), so the Release is not cosmetic — it is the deploy trigger.
+
+### Procedure
+
+1. **Start from up-to-date master.**
+   ```
+   git checkout master
+   git pull origin master
+   git checkout -b release/<version>          # e.g. release/0.9.1
+   ```
+
+2. **Bump the version in exactly two files** (do NOT bump anywhere else — there is no other source of truth):
+   - `main.go`: `const version = "<new version>"` (no `v` prefix).
+   - `CHANGELOG.md`: new top entry `` `<new version>` (aviationexam fork): `` with a sub-bullet per user-visible change since the previous tag. Link PRs as `[#N](https://github.com/aviationexam/deckschrubber/pull/N)`. Keep entries concise but specific (what changed, why it matters).
+   - Also update the `const version = "..."` reference in this `AGENTS.md` so it stays in sync with `main.go`.
+
+3. **Run the CI pipeline locally** (must be clean before opening the PR):
+   ```
+   go mod download
+   go mod verify
+   go vet ./...
+   go build -v ./...
+   ```
+
+4. **Commit, push, open PR.**
+   - Commit message: `release: <version>` (matches the `release: 0.9.0 (#14)` precedent).
+   - PR title: `release: <version>`.
+   - PR body: list headline change(s), other changes since last release, release mechanics (files touched + old→new version), and the exact verification commands you ran.
+   - PR target: `origin/master` only (see Contributing above).
+
+5. **Merge the PR** (squash or merge commit — match recent history; `release: 0.9.0 (#14)` was squash-merged).
+
+6. **Tag master and push the tag.** The tag is what `go install …@<tag>` resolves against and what the Docker workflow embeds via `DECKSCHRUBBER_VERSION`, so tag the exact merge commit on `master`:
+   ```
+   git checkout master
+   git pull origin master
+   git tag -a v<version> -m "v<version>"      # e.g. v0.9.1
+   git push origin v<version>
+   ```
+   Use an annotated tag (`-a`) with a `v` prefix — `go install` and `metadata-action`'s `type=semver` both expect `v<semver>`.
+
+7. **Publish the GitHub Release.** This is the action that fires the `release.yml` workflow and produces the signed GHCR image; do not skip it.
+   ```
+   gh release create v<version> \
+     --repo aviationexam/deckschrubber \
+     --title "v<version> - <short headline>" \
+     --notes-file <path-to-notes.md>
+   ```
+   Release notes structure (see `v0.9.0` release for the canonical shape):
+   - Opening paragraph referencing the fork.
+   - `## Headline change` — the one thing this release is about.
+   - `## Other changes since <previous tag>` — bulleted, PR-linked.
+   - `## Install` — `go install github.com/aviationexam/deckschrubber@v<version>`.
+   - `**Full diff:** [\`v<prev>...v<version>\`](https://github.com/aviationexam/deckschrubber/compare/v<prev>...v<version>)`.
+   - For stable releases leave `--prerelease` off so `latest` image tag moves. For pre-releases (e.g. `-rc.1`) pass `--prerelease` — `metadata-action` auto-skips `latest` for those.
+
+8. **Verify the release workflow succeeded.**
+   ```
+   gh run list --workflow=release.yml --repo aviationexam/deckschrubber --limit 1
+   ```
+   Image should appear at `ghcr.io/aviationexam/deckschrubber:<version>` (and `:latest` for stable releases), with a cosign signature verifiable via the recipe in the PR #16 description.
+
+### Release anti-patterns
+
+- Don't tag before the release PR is merged — the tag would not contain the version bump.
+- Don't create the GitHub Release without a tag, or with a tag that doesn't match `v<semver>` exactly — the Docker workflow reads `github.event.release.tag_name` verbatim.
+- Don't bump the version in `main.go` without a matching `CHANGELOG.md` entry (or vice versa).
+- Don't skip publishing the GitHub Release thinking "the tag is enough" — no Release event, no image.
 
 ## What not to do
 

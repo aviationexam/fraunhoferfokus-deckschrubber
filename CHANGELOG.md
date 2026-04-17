@@ -1,4 +1,8 @@
 # CHANGELOG
+* `0.9.1` (aviationexam fork):
+  * Publish signed container images to `ghcr.io/aviationexam/deckschrubber` on every GitHub Release via a new `release.yml` workflow; images are built from `go install github.com/aviationexam/deckschrubber@<tag>` inside a multi-stage `golang:1.25-alpine3.23` → `alpine:3.23` Dockerfile and signed with cosign (keyless, GitHub OIDC → Fulcio → Rekor) ([#16](https://github.com/aviationexam/deckschrubber/pull/16))
+  * Track Dockerfile base images with Dependabot (`docker` ecosystem entry) so `golang`/`alpine` base tags get weekly bump PRs
+  * Fix auto-format workflow skipping commits when only subdirectory Go files changed: set `disable_globbing: true` on `git-auto-commit-action` so `*.go` is interpreted as a git pathspec matching every nested package, not a shell glob against repo root ([#15](https://github.com/aviationexam/deckschrubber/pull/15))
 * `0.9.0` (aviationexam fork):
   * Safe untag for shared digests via two-phase deletion: tags sharing a manifest with a preserved tag are now retagged to a disposable digest before deletion, avoiding accidental removal of still-tagged images ([#2](https://github.com/aviationexam/deckschrubber/pull/2))
   * Fix pagination panic: pass allocated buffer to `Repositories()` instead of an empty slice
