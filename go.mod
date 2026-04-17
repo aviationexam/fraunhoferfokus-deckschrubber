@@ -1,12 +1,12 @@
 module github.com/fraunhoferfokus/deckschrubber
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/distribution/reference v0.6.0
 	github.com/docker/distribution v2.8.3+incompatible
 	github.com/sirupsen/logrus v1.9.3
-	golang.org/x/term v0.38.0
+	golang.org/x/term v0.42.0
 )
 
 require (
@@ -24,6 +24,6 @@ require (
 	github.com/prometheus/common v0.67.4 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
