@@ -22,8 +22,8 @@
 //     CreatedAt is what lets us age tags for -day/-month/-year/-latest
 //     assertions.
 //
-//   - The shared-digest test case (reproduction of fraunhoferfokus/
-//     deckschrubber#49) works by pushing image X under one tag, then using
+//   - The shared-digest test case (reproduction of aviationexam/
+//     deckschrubber#2) works by pushing image X under one tag, then using
 //     remote.Tag to re-point a second tag at the SAME manifest digest. That
 //     mirrors `docker tag ubuntu foo:a && docker tag ubuntu foo:b && docker
 //     push foo:a && docker push foo:b` exactly.
@@ -124,7 +124,7 @@ func (r *testRegistry) pushImage(t *testing.T, repo, tag string, created time.Ti
 // retag points `tag` at the same manifest digest as the given image, WITHOUT
 // re-uploading the manifest. This reproduces the `docker tag src dst && docker
 // push dst` pattern that produces two tags sharing a single digest — the
-// exact scenario PR #49 fixes for deckschrubber.
+// exact scenario aviationexam/deckschrubber#2 fixes.
 func (r *testRegistry) retag(t *testing.T, repo, tag string, img v1.Image) {
 	t.Helper()
 	ref := r.ref(t, repo, tag)

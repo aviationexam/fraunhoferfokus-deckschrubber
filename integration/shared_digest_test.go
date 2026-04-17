@@ -7,8 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestSharedDigestRetagAndDelete reproduces the scenario from
-// https://github.com/fraunhoferfokus/deckschrubber/pull/49.
+// TestSharedDigestRetagAndDelete reproduces the scenario fixed by
+// https://github.com/aviationexam/deckschrubber/pull/2 (two-phase safe
+// untagging for shared digests).
 //
 // When two tags share a single manifest digest and only one of them is
 // selected for deletion, Docker Distribution has no Untag operation, so a
@@ -102,11 +103,11 @@ func TestSharedDigestNoReplacementAvailable(t *testing.T) {
 	r.requireDigestPullable(t, repo, sharedDigest)
 }
 
-// TestSharedDigestAllDeletable is the plain PR #49 reproduction: multiple
-// tags at the same digest with NO non-deletable tags to protect. Before the
-// fix, the tool would fail to delete both tags because it could not safely
-// untag. After the fix, Phase 2 deletes the shared digest once and both
-// tags are gone.
+// TestSharedDigestAllDeletable is the plain reproduction of aviationexam/
+// deckschrubber#2's motivating scenario: multiple tags at the same digest
+// with NO non-deletable tags to protect. Before the fix, the tool would
+// fail to delete both tags because it could not safely untag. After the
+// fix, Phase 2 deletes the shared digest once and both tags are gone.
 func TestSharedDigestAllDeletable(t *testing.T) {
 	r := startRegistry(t)
 	repo := "app/all"
