@@ -1,4 +1,6 @@
 # CHANGELOG
+* `0.9.2` (aviationexam fork):
+  * Hotfix for broken `0.9.1` release workflow: pin `sigstore/cosign-installer` to the exact `v4.1.1` tag in `.github/workflows/release.yml`. `@v4` failed to resolve because the action does not publish a floating `v4` major-tag alias (only `v2` and `v3` exist), so the `v0.9.1` GHCR image was never built. No code changes versus `0.9.1` — identical binary behavior, just a release-workflow fix so the container image actually publishes.
 * `0.9.1` (aviationexam fork):
   * Publish signed container images to `ghcr.io/aviationexam/deckschrubber` on every GitHub Release via a new `release.yml` workflow; images are built from `go install github.com/aviationexam/deckschrubber@<tag>` inside a multi-stage `golang:1.25-alpine3.23` → `alpine:3.23` Dockerfile and signed with cosign (keyless, GitHub OIDC → Fulcio → Rekor) ([#16](https://github.com/aviationexam/deckschrubber/pull/16))
   * Track Dockerfile base images with Dependabot (`docker` ecosystem entry) so `golang`/`alpine` base tags get weekly bump PRs

@@ -97,7 +97,13 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        # sigstore/cosign-installer does not publish a floating `@v4`
+        # major-tag alias (unlike `@v2` and `@v3`), so pinning to `@v4`
+        # fails with "unable to find version v4" — which is exactly how
+        # v0.9.1's release workflow failed. Pin the full `v4.1.1` tag;
+        # Dependabot (github-actions ecosystem) will bump it when
+        # sigstore cuts a new version.
+        uses: sigstore/cosign-installer@v4.1.1
 
       - name: Sign image
         # Keyless signing: the id-token:write permission lets cosign
