@@ -59,6 +59,20 @@ jobs:
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v6
+        # GHCR's package UI reads the "description" from OCI **manifest
+        # annotations**, not from Docker image config labels. The
+        # Dockerfile's `LABEL org.opencontainers.image.description=...`
+        # and metadata-action's `labels:` output both write to image
+        # config, so GHCR ignores them and shows "No description
+        # provided". The fix is to emit the same values as
+        # **annotations** and pass them to build-push-action's
+        # `annotations:` input below. See:
+        # https://docs.github.com/packages/working-with-a-github-packages-registry/working-with-the-container-registry#labelling-container-images
+        env:
+          # Single-platform (linux/amd64) images only need `manifest`
+          # level. Add `index` too if we ever go multi-arch so the
+          # top-level index carries the description as well.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # Publish only the exact version tag (e.g. `0.9.1`) plus
@@ -73,6 +87,9 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
           labels: |
+            org.opencontainers.image.title=deckschrubber
+            org.opencontainers.image.description=Garbage-collect images from a Docker Distribution registry
+          annotations: |
             org.opencontainers.image.title=deckschrubber
             org.opencontainers.image.description=Garbage-collect images from a Docker Distribution registry
 
@@ -91,6 +108,10 @@ jobs:
             DECKSCHRUBBER_VERSION=${{ github.event.release.tag_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Manifest annotations — this is what GHCR reads for the
+          # package description, unlike `labels:` which only populates
+          # the image config. See the comment on the `meta` step above.
+          annotations: ${{ steps.meta.outputs.annotations }}
           # GitHub-hosted layer cache. Free for public repos and
           # drastically cuts rebuild time on no-op releases.
           cache-from: type=gha
