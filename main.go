@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/aviationexam/deckschrubber/util"
 	"github.com/distribution/reference"
-	"github.com/docker/distribution/context"
 	schema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/registry/client"
 	log "github.com/sirupsen/logrus"
