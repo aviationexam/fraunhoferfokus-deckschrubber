@@ -30,21 +30,7 @@ import (
 // rescued from deletion by not matching ^old-, which is precisely the
 // real-world scenario (e.g. "keep :latest while pruning :pr-123" when both
 // happen to share a digest).
-//
-// KNOWN BUG: this test currently fails with a runtime panic. main.go:410
-// calls tagsService.Tag(ctx, ...), but the tags service returned by
-// docker/distribution v2.8.3's client package has its Tag() method
-// implemented as literally `panic("not implemented")`
-// (see pkg/mod/github.com/docker/distribution@v2.8.3+incompatible/registry/
-// client/repository.go:352-354). Phase 1 is therefore unreachable without a
-// fix to the tool. The test is skipped until the tool implements Tag()
-// (e.g. via a direct PUT /v2/<repo>/manifests/<tag> with the target
-// manifest's content, bypassing the client's unimplemented stub).
-//
-// To confirm the bug locally, remove the t.Skip and run this test.
 func TestSharedDigestRetagAndDelete(t *testing.T) {
-	t.Skip("Phase 1 retag panics: docker/distribution client's tagsService.Tag is not implemented. See test doc comment.")
-
 	r := startRegistry(t)
 	repo := "app/shared"
 
