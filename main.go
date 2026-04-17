@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/writer"
 	"golang.org/x/term"
 )
 
@@ -55,6 +56,49 @@ var (
 const (
 	version string = "0.10.0"
 )
+
+// initLogging routes logrus output so that informational log levels go to
+// stdout and problem-level log levels (>= WarnLevel) go to stderr. Logrus
+// sends every level to stderr by default, which conflates normal
+// operational output ("Deleting image", "Tag not outdated") with genuine
+// diagnostics ("Could not delete image!") and makes it painful to pipe
+// deckschrubber's output into anything that distinguishes the two streams
+// (cron wrappers that treat stderr as "something went wrong", log shippers
+// that separate application logs from error logs).
+//
+// Logrus has no built-in "split by level" sink, so the default writer is
+// redirected to io.Discard and two writer hooks — one per stream — each
+// handle a disjoint set of levels. This follows logrus/hooks/writer's own
+// README; the hook's Fire() renders via entry.Bytes() so formatting
+// (field order, timestamp, logfmt) stays identical to the default output.
+// TraceLevel is included in the stdout set even though the tool doesn't
+// currently emit Trace logs, so future additions route correctly without
+// a follow-up change.
+//
+// Fatal/Panic still go to stderr and still call os.Exit(1)/panic after
+// hooks fire — logrus runs the hook chain before termination, so
+// log.Fatalf in main() continues to behave exactly as before, just via
+// stderr through a hook instead of the default writer.
+func initLogging() {
+	log.SetOutput(io.Discard)
+	log.AddHook(&writer.Hook{
+		Writer: os.Stderr,
+		LogLevels: []log.Level{
+			log.PanicLevel,
+			log.FatalLevel,
+			log.ErrorLevel,
+			log.WarnLevel,
+		},
+	})
+	log.AddHook(&writer.Hook{
+		Writer: os.Stdout,
+		LogLevels: []log.Level{
+			log.InfoLevel,
+			log.DebugLevel,
+			log.TraceLevel,
+		},
+	})
+}
 
 func init() {
 	/** CLI flags */
@@ -143,6 +187,12 @@ func main() {
 		fmt.Printf("Version: %s\n", version)
 		os.Exit(0)
 	}
+
+	// Must run before any log call or the first line would still hit
+	// logrus's default stderr sink. `-v` short-circuits above without
+	// logging, so calling here (not in init()) keeps the version path
+	// free of side effects.
+	initLogging()
 
 	if *debug {
 		log.SetLevel(log.DebugLevel)
