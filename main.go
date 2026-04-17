@@ -54,7 +54,7 @@ var (
 )
 
 const (
-	version string = "0.10.1"
+	version string = "0.10.2"
 )
 
 // initLogging routes logrus output so that informational log levels go to
