@@ -50,6 +50,7 @@ Flow per invocation:
 - Flags are package-level pointers initialized in `init()`. Adding a flag means: declare pointer in the `var (...)` block, register it in `init()`, document it in `README.md`'s Arguments list.
 - Registry HTTP API client is `github.com/google/go-containerregistry` (`pkg/name`, `pkg/v1/remote`, `pkg/authn`). The older `github.com/docker/distribution` client is intentionally NOT a dependency — it was removed from distribution/distribution v3.0.0's public API (distribution/distribution#4126) and the ecosystem standardised on go-containerregistry (crane, ko, cosign, Harbor).
 - `util.BasicAuthTransport` is kept instead of switching to `authn.Basic{}` because it URL-prefix-gates credentials (only injects them on requests to the configured `-registry` URL). Its contract is pinned by `integration/basicauth_test.go`.
+- `util.PathPrefixTransport` wraps `BasicAuthTransport` in the outbound direction so a `-registry` URL like `https://example.com/docker` still hits `/docker/v2/...` on the wire. `go-containerregistry`'s `name.NewRegistry` rejects anything beyond an RFC 3986 authority, so the path cannot travel with the Registry identity and must ride on the transport. Ordering matters: PathPrefix must run BEFORE BasicAuth so BasicAuth's URL-prefix gate sees the rewritten path. Pinned by `integration/path_prefix_test.go` and `util/pathprefixtransport_test.go`.
 - Dependabot (`.github/dependabot.yml`) handles gomod + github-actions weekly; prefer letting it bump versions rather than manual upgrades.
 
 ## Contributing

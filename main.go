@@ -91,24 +91,32 @@ func init() {
 	pageSize = flag.Int("page-size", 100, "Number of entries to fetch upon each request (default = 100)")
 }
 
-// parseRegistryHost extracts the host[:port] portion from a -registry URL
-// (e.g. http://localhost:5000) and returns it alongside the name.Option set
-// for constructing references: name.Insecure when the scheme is http so
-// go-containerregistry talks plain HTTP, and name.StrictValidation so we
-// fail loudly on malformed repo names rather than silently normalising them.
-func parseRegistryHost(registryURL string) (string, []name.Option, error) {
+// parseRegistryHost splits a -registry URL (e.g. http://localhost:5000 or
+// https://example.com/docker for a reverse-proxied deployment) into the
+// host[:port] go-containerregistry needs for name.NewRegistry, the path
+// prefix (empty for root-mounted registries, "docker" for the example
+// above) that util.PathPrefixTransport injects in front of /v2/ requests,
+// and the name.Option set used everywhere references are constructed.
+//
+// go-containerregistry's name.NewRegistry explicitly rejects path
+// components (it validates the argument as an RFC 3986 authority), so the
+// path cannot travel with the Registry identity; it must be carried at the
+// http.RoundTripper layer instead. See
+// google/go-containerregistry/pkg/name/registry.go checkRegistry().
+func parseRegistryHost(registryURL string) (string, string, []name.Option, error) {
 	u, err := url.Parse(registryURL)
 	if err != nil {
-		return "", nil, fmt.Errorf("parse registry URL %q: %w", registryURL, err)
+		return "", "", nil, fmt.Errorf("parse registry URL %q: %w", registryURL, err)
 	}
 	if u.Host == "" {
-		return "", nil, fmt.Errorf("registry URL %q has no host", registryURL)
+		return "", "", nil, fmt.Errorf("registry URL %q has no host", registryURL)
 	}
 	opts := []name.Option{name.StrictValidation}
 	if u.Scheme == "http" {
 		opts = append(opts, name.Insecure)
 	}
-	return u.Host, opts, nil
+	pathPrefix := strings.Trim(u.Path, "/")
+	return u.Host, pathPrefix, opts, nil
 }
 
 func main() {
@@ -147,19 +155,30 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	// We keep util.BasicAuthTransport instead of switching to authn.Basic{}
-	// because it URL-prefix-gates credentials (only injects them on requests
-	// to the configured -registry URL) and folds in -insecure TLS +
-	// http.ProxyFromEnvironment. authn.Basic would attach credentials to
-	// every request including token-exchange redirects, which is not the
-	// current contract. The integration test integration/basicauth_test.go
-	// pins this behaviour.
-	basicAuthTransport := util.NewBasicAuthTransport(*registryURL, *uname, *passwd, *insecure)
-
-	host, nameOpts, err := parseRegistryHost(*registryURL)
+	host, pathPrefix, nameOpts, err := parseRegistryHost(*registryURL)
 	if err != nil {
 		log.Fatalf("Could not parse registry URL! (err: %v)", err)
 	}
+
+	// Transport chain, outermost first (RoundTrip order matches call order):
+	//
+	//   PathPrefixTransport -> BasicAuthTransport -> http.Transport -> wire
+	//
+	// PathPrefixTransport runs FIRST so that by the time BasicAuthTransport
+	// sees the request, its URL already has the /prefix/v2/... shape; that
+	// way BasicAuthTransport's URL-prefix gate (strings.HasPrefix of the
+	// full request URL against the configured -registry URL including its
+	// path) matches correctly on reverse-proxied deployments. The gate is
+	// still what keeps credentials off auth-token redirects to other hosts.
+	//
+	// We keep util.BasicAuthTransport instead of authn.Basic{} for the same
+	// reason: URL-prefix gating + -insecure TLS + http.ProxyFromEnvironment
+	// in one place. authn.Basic would attach credentials to every request
+	// including redirects to unrelated hosts. integration/basicauth_test.go
+	// and integration/path_prefix_test.go pin this behaviour.
+	basicAuthTransport := util.NewBasicAuthTransport(*registryURL, *uname, *passwd, *insecure)
+	transport := util.NewPathPrefixTransport(pathPrefix, basicAuthTransport)
+
 	registry, err := name.NewRegistry(host, nameOpts...)
 	if err != nil {
 		log.Fatalf("Could not create registry object! (err: %v)", err)
@@ -172,7 +191,7 @@ func main() {
 	// auth on top; our transport is the sole source of credentials.
 	remoteOpts := []remote.Option{
 		remote.WithContext(ctx),
-		remote.WithTransport(basicAuthTransport),
+		remote.WithTransport(transport),
 		remote.WithAuth(authn.Anonymous),
 	}
 
