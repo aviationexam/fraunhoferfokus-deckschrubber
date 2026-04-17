@@ -61,16 +61,17 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Drive tagging from the release ref. `flavor: latest=auto`
-          # combined with docker/metadata-action's semver handling means
-          # `latest` moves only for non-prerelease semver tags (v0.9.0
-          # yes, v0.9.0-rc.1 no).
+          # Publish only the exact version tag (e.g. `0.9.1`) plus
+          # `latest` for non-prerelease semver. `flavor: latest=auto`
+          # combined with docker/metadata-action's semver handling
+          # gates `latest` to non-prerelease tags automatically
+          # (v0.9.0 yes, v0.9.0-rc.1 no). Sliding `0.9` / `0` tags are
+          # intentionally omitted - consumers should pin by exact
+          # version.
           flavor: |
             latest=auto
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
           labels: |
             org.opencontainers.image.title=deckschrubber
             org.opencontainers.image.description=Garbage-collect images from a Docker Distribution registry
