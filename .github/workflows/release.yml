@@ -1,0 +1,141 @@
+name: Release Image
+
+# Build and publish a container image to GHCR whenever a GitHub Release is
+# published. The release tag (e.g. `v0.9.0`) is passed into the Dockerfile
+# as `DECKSCHRUBBER_VERSION`, so `go install` pulls the exact published
+# module version and the resulting image is reproducible per release.
+#
+# First-time setup (one-off, manual):
+#   After the first successful publish, open
+#     https://github.com/aviationexam/deckschrubber/pkgs/container/deckschrubber
+#   → Package settings → Change visibility → Public. Public packages on
+#   GHCR are free of storage and bandwidth limits regardless of size or
+#   pull volume.
+
+on:
+  release:
+    types: [published]
+
+# Only applied for the image built from stable releases; prereleases skip
+# the `latest` tag (see metadata-action `flavor` block below).
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# Re-publishing the same release (or editing it) should supersede any
+# in-flight build rather than race it.
+concurrency:
+  group: release-image-${{ github.event.release.tag_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build & push image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required to push packages to ghcr.io using GITHUB_TOKEN.
+      packages: write
+      # Reserved for future keyless cosign signing; harmless otherwise.
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Publish only the exact version tag (e.g. `0.9.1`) plus
+          # `latest` for non-prerelease semver. `flavor: latest=auto`
+          # combined with docker/metadata-action's semver handling
+          # gates `latest` to non-prerelease tags automatically
+          # (v0.9.0 yes, v0.9.0-rc.1 no). Sliding `0.9` / `0` tags are
+          # intentionally omitted - consumers should pin by exact
+          # version.
+          flavor: |
+            latest=auto
+          tags: |
+            type=semver,pattern={{version}}
+          labels: |
+            org.opencontainers.image.title=deckschrubber
+            org.opencontainers.image.description=Garbage-collect images from a Docker Distribution registry
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          # `github.event.release.tag_name` is the human-facing tag name
+          # (e.g. `v0.9.0`), which is exactly what `go install ...@<ver>`
+          # expects for a tagged module version.
+          build-args: |
+            DECKSCHRUBBER_VERSION=${{ github.event.release.tag_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GitHub-hosted layer cache. Free for public repos and
+          # drastically cuts rebuild time on no-op releases.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4
+
+      - name: Sign image
+        # Keyless signing: the id-token:write permission lets cosign
+        # exchange GitHub's OIDC token for an ephemeral Fulcio cert.
+        # The signature and the Rekor transparency-log entry are
+        # uploaded automatically; no key material is stored anywhere.
+        #
+        # Sign by `<image>@<digest>`, not by tag. Every tag we pushed
+        # points at the same manifest (same digest), so one signing
+        # round per tag covers the whole publish. Signing by digest
+        # closes the race window where a tag could be overwritten
+        # between build and sign.
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          while IFS= read -r tag; do
+            [ -z "${tag}" ] && continue
+            image="${tag%%:*}"
+            cosign sign --yes "${image}@${DIGEST}"
+          done <<< "${TAGS}"
+
+      - name: Summarise published image
+        if: ${{ success() }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### Published image"
+            echo ""
+            echo "- **Release**: \`${{ github.event.release.tag_name }}\`"
+            echo "- **Digest**: \`${DIGEST}\`"
+            echo ""
+            echo "**Tags:**"
+            echo ""
+            echo '```'
+            echo "${TAGS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
