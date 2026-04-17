@@ -74,8 +74,11 @@ func TestDryRunDeletesNothing(t *testing.T) {
 
 	output := r.runDeckschrubber(t, "-repos", "10", "-repo", "^app/", "-day", "1", "-latest", "0", "-dry")
 
-	require.Contains(t, output, "Not actually deleting",
-		"dry-run should log the 'Not actually deleting' phrase")
+	for _, tag := range []string{"old-1", "old-2", "old-3"} {
+		require.True(t,
+			logLineMatches(output, "Not actually deleting image (-dry=true)", tag),
+			"dry-run should log 'Not actually deleting' for %s; output:\n%s", tag, output)
+	}
 
 	r.requireTagExists(t, repo, "old-1")
 	r.requireTagExists(t, repo, "old-2")

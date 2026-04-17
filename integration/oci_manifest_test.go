@@ -79,13 +79,17 @@ func TestOCIManifestCreated(t *testing.T) {
 		"-dry",
 	)
 
-	require.Contains(t, output, `tag=old-oci`,
-		"output should reference the old OCI tag; output:\n%s", output)
-	require.Contains(t, output, `Marking tag as outdated`,
-		"old-oci (100 days old) should be marked outdated; output:\n%s", output)
+	markedOld := logLineMatches(output, "Marking tag as outdated", "old-oci")
+	markedFresh := logLineMatches(output, "Marking tag as outdated", "fresh-oci")
+	notOutdatedFresh := logLineMatches(output, "Tag not outdated", "fresh-oci")
+	notOutdatedOld := logLineMatches(output, "Tag not outdated", "old-oci")
 
-	require.Contains(t, output, `tag=fresh-oci`,
-		"output should reference the fresh OCI tag; output:\n%s", output)
-	require.Contains(t, output, `Tag not outdated`,
-		"fresh-oci (5 days old) should NOT be marked outdated; output:\n%s", output)
+	require.True(t, markedOld,
+		"old-oci (100 days old) should be marked outdated; output:\n%s", output)
+	require.False(t, markedFresh,
+		"fresh-oci (5 days old) must NOT be marked outdated; output:\n%s", output)
+	require.True(t, notOutdatedFresh,
+		"fresh-oci (5 days old) should log 'Tag not outdated'; output:\n%s", output)
+	require.False(t, notOutdatedOld,
+		"old-oci (100 days old) must NOT log 'Tag not outdated'; output:\n%s", output)
 }

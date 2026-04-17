@@ -60,8 +60,15 @@ func TestSharedDigestRetagAndDelete(t *testing.T) {
 		"-latest", "0",
 	)
 
-	require.Contains(t, output, "Digest is shared with non-deletable tags",
-		"expected Phase 1 (shared digest) log line")
+	require.True(t,
+		logLineMatches(output, "Digest is shared with non-deletable tags - retagging to disposable digest for safe untag", "old-shared"),
+		"Phase 1 retag log must be bound to old-shared (the tag sharing a digest with keep-shared); output:\n%s", output)
+	require.False(t,
+		logLineMatches(output, "Digest is shared with non-deletable tags - retagging to disposable digest for safe untag", "keep-shared"),
+		"Phase 1 retag log must NOT fire for keep-shared (it is non-deletable); output:\n%s", output)
+	require.False(t,
+		logLineMatches(output, "Digest is shared with non-deletable tags - retagging to disposable digest for safe untag", "old-unique"),
+		"Phase 1 retag log must NOT fire for old-unique (its digest is not shared); output:\n%s", output)
 
 	r.requireTagExists(t, repo, "keep-shared")
 	r.requireDigestPullable(t, repo, sharedDigest)
@@ -91,9 +98,12 @@ func TestSharedDigestNoReplacementAvailable(t *testing.T) {
 		"-latest", "0",
 	)
 
-	require.Contains(t, output,
-		"no disposable replacement digest is available",
-		"expected Phase 1 safety-skip log")
+	require.True(t,
+		logLineMatches(output, "The underlying image is also used by non-deletable tags and no disposable replacement digest is available - skipping deletion", "old-shared"),
+		"Phase 1 safety-skip log must be bound to old-shared (the only deletable tag); output:\n%s", output)
+	require.False(t,
+		logLineMatches(output, "The underlying image is also used by non-deletable tags and no disposable replacement digest is available - skipping deletion", "keep-shared"),
+		"safety-skip log must NOT fire for keep-shared (it is non-deletable); output:\n%s", output)
 
 	r.requireTagExists(t, repo, "keep-shared")
 	r.requireTagExists(t, repo, "old-shared")

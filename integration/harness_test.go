@@ -37,6 +37,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os/exec"
+	"regexp"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -249,4 +250,21 @@ func init() {
 
 func nextSeed() int64 {
 	return seedCounter.Add(1)
+}
+
+// logLineMatches reports whether `output` contains a single logrus logfmt
+// line that has BOTH the given msg and the given tag field. The logger
+// writes lines shaped like
+//
+//	time="..." level=info msg="Tag not outdated" repo=... tag=<tag>
+//
+// Two independent strings.Contains calls on msg and tag would both succeed
+// even when msg belongs to a different tag on a different line, so the
+// invariant "msg X was logged FOR tag Y" would not actually be pinned.
+// Anchoring both conditions to one line via `(?m)^...$` is what proves msg
+// is associated with tag. Inputs are regex-escaped, so test sites can pass
+// plain literal strings.
+func logLineMatches(output, msg, tag string) bool {
+	pattern := `(?m)^.*\bmsg="` + regexp.QuoteMeta(msg) + `".*\btag=` + regexp.QuoteMeta(tag) + `\b.*$`
+	return regexp.MustCompile(pattern).MatchString(output)
 }
