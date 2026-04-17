@@ -25,7 +25,7 @@ go run .            # prints usage (no args = usage, not an error)
 go run . -dry -registry http://localhost:5000 -repos 30
 ```
 
-Version string is hardcoded in `main.go` (`const version = "0.9.2"`). Bump it there and update `CHANGELOG.md` when releasing. See the "Release workflow" section below for the full cut-release procedure.
+Version string is hardcoded in `main.go` (`const version = "0.9.3"`). Bump it there and update `CHANGELOG.md` when releasing. See the "Release workflow" section below for the full cut-release procedure.
 
 ## Architecture (read before editing `main.go`)
 
