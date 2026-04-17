@@ -12,11 +12,14 @@
 # releases under the pinned tag. The builder alpine minor is kept in
 # lockstep with the runtime alpine minor to avoid musl/CA-bundle drift
 # between stages.
+#
+# Base images are referenced as literal `FROM` tags rather than via an
+# `ARG` indirection because Dependabot's docker ecosystem file-updater
+# does not rewrite `FROM ${VAR}` references (see
+# dependabot/dependabot-core#4597, #4837 - closed unmerged). Keeping
+# the tags inline ensures Dependabot can actually bump them.
 
-ARG GOLANG_IMAGE=golang:1.25-alpine3.23
-ARG RUNTIME_IMAGE=alpine:3.23
-
-FROM ${GOLANG_IMAGE} AS build
+FROM golang:1.25-alpine3.23 AS build
 
 # Override at build time to pin a specific release, e.g.
 #   docker build --build-arg DECKSCHRUBBER_VERSION=v0.9.0 .
@@ -31,7 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     go install "${DECKSCHRUBBER_MODULE}@${DECKSCHRUBBER_VERSION}"
 
-FROM ${RUNTIME_IMAGE}
+FROM alpine:3.23
 
 # ca-certificates is required so deckschrubber can talk to HTTPS registries.
 RUN apk add --no-cache ca-certificates
