@@ -47,6 +47,6 @@ COPY --from=build /out/deckschrubber /usr/local/bin/deckschrubber
 LABEL org.opencontainers.image.title="deckschrubber" \
       org.opencontainers.image.description="Garbage-collect images from a Docker Distribution registry" \
       org.opencontainers.image.source="https://github.com/aviationexam/deckschrubber" \
-      org.opencontainers.image.licenses="Apache-2.0"
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 
 ENTRYPOINT ["deckschrubber"]
